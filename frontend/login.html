@@ -8,7 +8,7 @@
 <body class="login-page">
 
   <div class="login-card">
-    <img src="../und-university-of-north-dakota-logo-png_seeklogo-433654.png" alt="University of North Dakota" class="login-logo">
+    <img src="./images/und-university-of-north-dakota-logo-png_seeklogo-433654.png" alt="University of North Dakota" class="login-logo">
     <h1>HawkReserve</h1>
 
     <div class="form-group">
@@ -39,7 +39,7 @@
       errEl.style.display = "none";
 
       if (username === "student" && password === "student") {
-        sessionStorage.setItem("user", JSON.stringify({ id: 1, username: "Anna", role: "student" }));
+        sessionStorage.setItem("user", JSON.stringify({ id: 1, username: "Student", role: "student" }));
         location.href = "index.html";
       } else if (username === "admin" && password === "admin") {
         sessionStorage.setItem("user", JSON.stringify({ id: 0, username: "Admin", role: "admin" }));

@@ -34,9 +34,24 @@ rooms = [
     Room(building="Memorial Union", room_num="306", capacity=6),
     Room(building="Memorial Union", room_num="307", capacity=8),
     Room(building="Memorial Union", room_num="308", capacity=10),
-    # Chester Fritz Library
+    # Chester Fritz Library - 1st floor
     Room(building="Chester Fritz Library", room_num="101", capacity=4),
     Room(building="Chester Fritz Library", room_num="102", capacity=6),
+    Room(building="Chester Fritz Library", room_num="103", capacity=4),
+    Room(building="Chester Fritz Library", room_num="104", capacity=6),
+    Room(building="Chester Fritz Library", room_num="105", capacity=8),
+    # Chester Fritz Library - 2nd floor
+    Room(building="Chester Fritz Library", room_num="201", capacity=4),
+    Room(building="Chester Fritz Library", room_num="202", capacity=6),
+    Room(building="Chester Fritz Library", room_num="203", capacity=4),
+    Room(building="Chester Fritz Library", room_num="204", capacity=10),
+    # Chester Fritz Library - 3rd floor
+    Room(building="Chester Fritz Library", room_num="301", capacity=6),
+    Room(building="Chester Fritz Library", room_num="302", capacity=4),
+    Room(building="Chester Fritz Library", room_num="303", capacity=8),
+    Room(building="Chester Fritz Library", room_num="304", capacity=4),
+    Room(building="Chester Fritz Library", room_num="305", capacity=4),
+
 ]
 db.add_all(rooms)
 db.commit()
