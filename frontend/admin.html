@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HawkReserve — Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <img src="../und-logo-png-transparent.png" alt="UND" class="logo">
+      <span class="header-title">HawkReserve</span>
+    </div>
+    <div class="header-right">
+      <span class="user-name">Admin</span>
+      <button class="btn-sm btn-outline" onclick="logout()">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="showTab('reservations', this)">Reservations</button>
+      <button class="tab-btn" onclick="showTab('block', this)">Block Room</button>
+      <button class="tab-btn" onclick="showTab('permissions', this)">Edit Permissions</button>
+    </div>
+
+    <!-- Reservations tab -->
+    <div id="tab-reservations">
+      <div id="reservations-content">Loading...</div>
+    </div>
+
+    <!-- Block Room tab -->
+    <div id="tab-block" style="display:none">
+      <div class="search-form" style="max-width:480px;">
+        <div class="form-group">
+          <label for="block-building">Building</label>
+          <select id="block-building" onchange="updateRoomOptions()">
+            <option value="">Select a building</option>
+            <option value="Memorial Union">Memorial Union</option>
+            <option value="Chester Fritz Library">Chester Fritz Library</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="block-room">Room</label>
+          <select id="block-room">
+            <option value="">Select a building first</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="block-date">Date</label>
+          <input type="date" id="block-date">
+        </div>
+        <div class="form-group">
+          <label for="block-start">Start Time</label>
+          <select id="block-start"></select>
+        </div>
+        <div class="form-group">
+          <label for="block-end">End Time</label>
+          <select id="block-end"></select>
+        </div>
+        <div id="block-msg" style="display:none; margin-bottom:12px;"></div>
+        <button onclick="blockRoom()">Block Room</button>
+      </div>
+    </div>
+
+    <!-- Edit Permissions tab -->
+    <div id="tab-permissions" style="display:none">
+      <div class="search-form" style="max-width:480px;">
+        <div class="form-group">
+          <label for="max-session">Max session length (minutes)</label>
+          <input type="number" id="max-session" min="1">
+        </div>
+        <div class="form-group">
+          <label for="max-weekly">Max booking time per week (minutes)</label>
+          <input type="number" id="max-weekly" min="1">
+        </div>
+        <div id="constraints-msg" style="display:none; margin-bottom:12px;"></div>
+        <button onclick="saveConstraints()">Save Changes</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const API = "http://localhost:8000";
+
+    const user = JSON.parse(sessionStorage.getItem("user") || "null");
+    if (!user || user.role !== "admin") location.href = "login.html";
+
+    function logout() {
+      sessionStorage.removeItem("user");
+      location.href = "login.html";
+    }
+
+    function showTab(name, btn) {
+      document.getElementById("tab-reservations").style.display = name === "reservations" ? "block" : "none";
+      document.getElementById("tab-block").style.display = name === "block" ? "block" : "none";
+      document.getElementById("tab-permissions").style.display = name === "permissions" ? "block" : "none";
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      if (name === "permissions") loadConstraints();
+      if (name === "block") loadAllRooms();
+    }
+
+    // ---- Reservations tab ----
+
+    async function loadReservations() {
+      const container = document.getElementById("reservations-content");
+      try {
+        const res = await fetch(`${API}/admin/reservations`);
+        const data = await res.json();
+
+        if (data.length === 0) {
+          container.innerHTML = "<p style='color:#666'>No reservations found.</p>";
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Building</th>
+                <th>Room</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map(r => `
+                <tr id="row-${r.id}">
+                  <td>${r.student_id === 0 ? "—" : r.student_id}</td>
+                  <td>${r.building}</td>
+                  <td>${r.room_num}</td>
+                  <td>${r.start_time}</td>
+                  <td>${r.end_time}</td>
+                  <td>
+                    ${r.status}
+                    ${r.cancellation_reason ? `<br><small style="color:#888;">${r.cancellation_reason}</small>` : ""}
+                  </td>
+                  <td>
+                    ${r.status === "active" ? `<button class="btn-sm" onclick="startCancel(${r.id})">Cancel</button>` : ""}
+                  </td>
+                </tr>
+                <tr id="cancel-form-${r.id}" style="display:none">
+                  <td colspan="7" style="padding:8px 14px; background:#fafafa;">
+                    <div style="display:flex; gap:8px; align-items:center;">
+                      <input type="text" id="reason-${r.id}" placeholder="Reason for cancellation" style="flex:1; max-width:360px;">
+                      <button class="btn-sm" onclick="confirmCancel(${r.id})">Confirm</button>
+                      <button class="btn-sm btn-outline" onclick="closeCancel(${r.id})">Back</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+      } catch {
+        container.innerHTML = "<p>Could not load reservations. Is the server running?</p>";
+      }
+    }
+
+    function startCancel(id) {
+      document.getElementById(`cancel-form-${id}`).style.display = "";
+    }
+
+    function closeCancel(id) {
+      document.getElementById(`cancel-form-${id}`).style.display = "none";
+    }
+
+    async function confirmCancel(id) {
+      const reason = document.getElementById(`reason-${id}`).value.trim();
+      if (!reason) {
+        alert("Please enter a reason.");
+        return;
+      }
+
+      const res = await fetch(`${API}/admin/reservations/${id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        loadReservations();
+      } else {
+        alert(data.detail || "Error cancelling reservation.");
+      }
+    }
+
+    // ---- Block Room tab ----
+
+    let allRooms = [];
+
+    async function loadAllRooms() {
+      try {
+        const res = await fetch(`${API}/admin/rooms`);
+        allRooms = await res.json();
+      } catch { allRooms = []; }
+    }
+
+    function updateRoomOptions() {
+      const building = document.getElementById("block-building").value;
+      const roomSelect = document.getElementById("block-room");
+      roomSelect.innerHTML = '<option value="">Select a room</option>';
+      allRooms
+        .filter(r => r.building === building)
+        .forEach(r => {
+          const opt = document.createElement("option");
+          opt.value = r.id;
+          opt.textContent = `Room ${r.room_num} (cap. ${r.capacity})`;
+          roomSelect.appendChild(opt);
+        });
+    }
+
+    // populate time selects with 15-min intervals (midnight to 11:45 PM)
+    (function buildTimeSelects() {
+      const starts = document.getElementById("block-start");
+      const ends = document.getElementById("block-end");
+      for (let h = 0; h < 24; h++) {
+        for (let min of [0, 15, 30, 45]) {
+          const hh = String(h).padStart(2, "0");
+          const mm = String(min).padStart(2, "0");
+          const val = `${hh}:${mm}`;
+          const label = new Date(`2000-01-01T${val}`).toLocaleTimeString("en-US", {
+            hour: "numeric", minute: "2-digit"
+          });
+          const o1 = document.createElement("option");
+          o1.value = val; o1.textContent = label;
+          starts.appendChild(o1);
+          const o2 = document.createElement("option");
+          o2.value = val; o2.textContent = label;
+          ends.appendChild(o2);
+        }
+      }
+    })();
+
+    async function blockRoom() {
+      const roomId = document.getElementById("block-room").value;
+      const date   = document.getElementById("block-date").value;
+      const start  = document.getElementById("block-start").value;
+      const end    = document.getElementById("block-end").value;
+      const msgEl  = document.getElementById("block-msg");
+      msgEl.style.display = "none";
+
+      if (!roomId || !date || !start || !end) {
+        msgEl.className = "error-box";
+        msgEl.textContent = "Please fill out all fields.";
+        msgEl.style.display = "block";
+        return;
+      }
+
+      const res = await fetch(`${API}/admin/rooms/${roomId}/block`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_time: `${date} ${start}`, end_time: `${date} ${end}` })
+      });
+
+      const data = await res.json();
+      msgEl.className = (res.ok && data.success) ? "success-box" : "error-box";
+      msgEl.textContent = (res.ok && data.success) ? "Room blocked successfully." : (data.detail || "Error blocking room.");
+      msgEl.style.display = "block";
+    }
+
+    // ---- Edit Permissions tab ----
+
+    async function loadConstraints() {
+      try {
+        const res = await fetch(`${API}/admin/constraints`);
+        const data = await res.json();
+        document.getElementById("max-session").value = data.max_session_min;
+        document.getElementById("max-weekly").value = data.max_weekly_min;
+      } catch { }
+    }
+
+    async function saveConstraints() {
+      const maxSession = parseInt(document.getElementById("max-session").value);
+      const maxWeekly  = parseInt(document.getElementById("max-weekly").value);
+      const msgEl = document.getElementById("constraints-msg");
+      msgEl.style.display = "none";
+
+      if (!maxSession || !maxWeekly || maxSession <= 0 || maxWeekly <= 0) {
+        msgEl.className = "error-box";
+        msgEl.textContent = "Both values must be positive numbers.";
+        msgEl.style.display = "block";
+        return;
+      }
+
+      const res = await fetch(`${API}/admin/constraints`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ max_weekly_min: maxWeekly, max_session_min: maxSession })
+      });
+      const data = await res.json();
+
+      msgEl.className = res.ok ? "success-box" : "error-box";
+      msgEl.textContent = res.ok ? "Settings saved." : (data.detail || "Error saving settings.");
+      msgEl.style.display = "block";
+    }
+
+    loadReservations();
+  </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HawkReserve — Log In</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+
+  <div class="login-card">
+    <img src="../und-university-of-north-dakota-logo-png_seeklogo-433654.png" alt="University of North Dakota" class="login-logo">
+    <h1>HawkReserve</h1>
+
+    <div class="form-group">
+      <label for="username">Username</label>
+      <input type="text" id="username" autocomplete="username">
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password">
+    </div>
+
+    <div id="error-msg" class="error-box" style="display:none; margin-bottom: 12px;"></div>
+
+    <button class="btn-block" onclick="login()">Log In</button>
+  </div>
+
+  <script>
+    const existing = JSON.parse(sessionStorage.getItem("user") || "null");
+    if (existing) {
+      location.href = existing.role === "admin" ? "admin.html" : "index.html";
+    }
+
+    function login() {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      const errEl = document.getElementById("error-msg");
+      errEl.style.display = "none";
+
+      if (username === "student" && password === "student") {
+        sessionStorage.setItem("user", JSON.stringify({ id: 1, username: "Anna", role: "student" }));
+        location.href = "index.html";
+      } else if (username === "admin" && password === "admin") {
+        sessionStorage.setItem("user", JSON.stringify({ id: 0, username: "Admin", role: "admin" }));
+        location.href = "admin.html";
+      } else {
+        errEl.textContent = "Invalid username or password.";
+        errEl.style.display = "block";
+      }
+    }
+
+    document.addEventListener("keydown", e => {
+      if (e.key === "Enter") login();
+    });
+  </script>
+</body>
+</html>

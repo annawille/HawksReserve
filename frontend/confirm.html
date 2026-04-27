@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HawkReserve — Confirm</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <a href="javascript:history.back()" style="font-size:20px; text-decoration:none; color:#555;">&#8592;</a>
+      <img src="../und-logo-png-transparent.png" alt="UND" class="logo">
+      <span class="header-title">HawkReserve</span>
+    </div>
+    <div class="header-right">
+      <span class="user-name" id="header-username"></span>
+      <button class="btn-sm btn-outline" onclick="logout()">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="card confirm-card" style="margin: 0 auto;">
+      <h2 style="margin-bottom:20px; color:#107C10;">Confirm Reservation</h2>
+      <p id="summary"></p>
+      <button id="confirm-btn" onclick="confirmReservation()">Confirm</button>
+      <br><br>
+      <a href="javascript:history.back()">Go back</a>
+    </div>
+
+    <div id="result" style="display:none; max-width:320px; margin:16px auto;"></div>
+  </main>
+
+  <script>
+    const API = "http://localhost:8000";
+
+    const user = JSON.parse(sessionStorage.getItem("user") || "null");
+    if (!user) location.href = "login.html";
+
+    document.getElementById("header-username").textContent = user ? user.username : "";
+
+    function logout() {
+      sessionStorage.removeItem("user");
+      location.href = "login.html";
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const roomId    = params.get("room_id");
+    const roomNum   = params.get("room_num");
+    const building  = params.get("building");
+    const date      = params.get("date");
+    const startTime = params.get("start_time");
+
+    const [h, m] = startTime.split(":").map(Number);
+    const endH = String(h + 1).padStart(2, "0");
+    const endTime = `${endH}:${String(m).padStart(2, "0")}`;
+
+    function fmt12(timeStr) {
+      const [hh, mm] = timeStr.split(":").map(Number);
+      const ampm = hh < 12 ? "AM" : "PM";
+      const h12 = hh === 0 ? 12 : hh > 12 ? hh - 12 : hh;
+      return `${h12}:${String(mm).padStart(2, "0")} ${ampm}`;
+    }
+
+    const dateDisplay = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+      weekday: "long", month: "long", day: "numeric"
+    });
+
+    document.getElementById("summary").innerHTML = `
+      <strong>${building}</strong><br>
+      Room ${roomNum}<br>
+      ${dateDisplay}<br>
+      ${fmt12(startTime)} – ${fmt12(endTime)}
+    `;
+
+    async function confirmReservation() {
+      document.getElementById("confirm-btn").disabled = true;
+
+      const res = await fetch(`${API}/reservations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: user.id,
+          room_id: parseInt(roomId),
+          start_time: `${date} ${startTime}`,
+          end_time: `${date} ${endTime}`
+        })
+      });
+
+      const data = await res.json();
+      const result = document.getElementById("result");
+      result.style.display = "block";
+
+      if (data.success) {
+        result.innerHTML = `
+          <div class="success-box">
+            Reservation confirmed! <a href="index.html">Back to home</a>
+          </div>`;
+      } else {
+        result.innerHTML = `<div class="error-box">${data.error}</div>`;
+        document.getElementById("confirm-btn").disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

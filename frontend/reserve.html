@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HawkReserve — Reserve</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <a href="index.html" style="font-size:20px; text-decoration:none; color:#555;">&#8592;</a>
+      <img src="../und-logo-png-transparent.png" alt="UND" class="logo">
+      <span class="header-title">HawkReserve</span>
+    </div>
+    <div class="header-right">
+      <span class="user-name" id="header-username"></span>
+      <button class="btn-sm btn-outline" onclick="logout()">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Step 1: Select a day -->
+    <div id="step-day">
+      <h2 id="building-name" style="font-size:22px; color:#107C10; margin-bottom:20px;"></h2>
+      <h3>Select a day</h3>
+      <div class="day-btn-row" id="day-buttons"></div>
+    </div>
+
+    <!-- Step 2: Select start time, then end time -->
+    <div id="step-time" style="display:none">
+      <div class="ctx-bar" id="ctx-day" style="margin-bottom:20px;"></div>
+      <h3>Select a start time</h3>
+      <div class="time-grid" id="time-grid"></div>
+
+      <div id="end-time-section" style="display:none; margin-top:8px;">
+        <h3>Select an end time</h3>
+        <div class="time-grid" id="end-time-grid"></div>
+      </div>
+    </div>
+
+    <!-- Step 3: Available rooms -->
+    <div id="step-rooms" style="display:none">
+      <div class="ctx-bar" id="ctx-time" style="margin-bottom:20px;"></div>
+      <h3>Available Rooms</h3>
+      <div class="room-grid" id="room-grid"></div>
+    </div>
+  </main>
+
+  <script>
+    const API = "http://localhost:8000";
+
+    const user = JSON.parse(sessionStorage.getItem("user") || "null");
+    if (!user) location.href = "login.html";
+    document.getElementById("header-username").textContent = user ? user.username : "";
+
+    function logout() {
+      sessionStorage.removeItem("user");
+      location.href = "login.html";
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const building = params.get("building") || "Memorial Union";
+    document.getElementById("building-name").textContent = building;
+
+    // building hours by day of week (0=Sun), in minutes from midnight
+    const HOURS = {
+      "Memorial Union": [
+        { open: 660,  close: 1440 },  // Sun  11:00 AM – Midnight
+        { open: 420,  close: 1440 },  // Mon   7:00 AM – Midnight
+        { open: 420,  close: 1440 },  // Tue
+        { open: 420,  close: 1440 },  // Wed
+        { open: 420,  close: 1440 },  // Thu
+        { open: 420,  close: 1320 },  // Fri   7:00 AM – 10:00 PM
+        { open: 480,  close: 1320 },  // Sat   8:00 AM – 10:00 PM
+      ],
+      "Chester Fritz Library": [
+        { open: 780,  close: 1440 },  // Sun   1:00 PM – Midnight
+        { open: 450,  close: 1440 },  // Mon   7:30 AM – Midnight
+        { open: 450,  close: 1440 },  // Tue
+        { open: 450,  close: 1440 },  // Wed
+        { open: 450,  close: 1440 },  // Thu
+        { open: 450,  close: 1140 },  // Fri   7:30 AM – 7:00 PM
+        { open: 600,  close: 1140 },  // Sat  10:00 AM – 7:00 PM
+      ]
+    };
+
+    let maxSessionMin = 120;
+    let selectedDate = null;
+    let selectedDow = null;
+    let selectedStart = null;
+    let selectedStartMins = null;
+
+    fetch(`${API}/admin/constraints`)
+      .then(r => r.json())
+      .then(d => { if (d.max_session_min) maxSessionMin = d.max_session_min; })
+      .catch(() => {});
+
+    function fmtTime(mins) {
+      const h = Math.floor(mins / 60) % 24;
+      const m = mins % 60;
+      const ampm = h < 12 ? "AM" : "PM";
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+    }
+
+    function fmtDate(dateStr) {
+      return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+        weekday: "long", month: "short", day: "numeric"
+      });
+    }
+
+    // build the 7 day buttons
+    const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const dateStr = d.toISOString().split("T")[0];
+      const label = i === 0 ? "Today" : DAYS[d.getDay()];
+
+      const btn = document.createElement("button");
+      btn.className = "day-btn";
+      btn.innerHTML = `<strong>${label}</strong><br>${MONTHS[d.getMonth()]} ${d.getDate()}`;
+      btn.onclick = () => selectDay(dateStr, d.getDay(), btn);
+      document.getElementById("day-buttons").appendChild(btn);
+    }
+
+    function selectDay(dateStr, dayOfWeek, btn) {
+      document.querySelectorAll(".day-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+
+      selectedDate = dateStr;
+      selectedDow = dayOfWeek;
+
+      const hours = (HOURS[building] || HOURS["Memorial Union"])[dayOfWeek];
+      const timeGrid = document.getElementById("time-grid");
+      timeGrid.innerHTML = "";
+
+      // start time slots: from open to (close - 60 min) in 15-min steps
+      for (let t = hours.open; t <= hours.close - 60; t += 15) {
+        const hh = String(Math.floor(t / 60)).padStart(2, "0");
+        const mm = String(t % 60).padStart(2, "0");
+        const tb = document.createElement("button");
+        tb.className = "time-btn";
+        tb.textContent = fmtTime(t);
+        tb.onclick = () => selectStartTime(`${hh}:${mm}`, t, tb);
+        timeGrid.appendChild(tb);
+      }
+
+      document.getElementById("ctx-day").textContent = `${building}  ·  ${fmtDate(dateStr)}`;
+      document.getElementById("end-time-section").style.display = "none";
+      document.getElementById("step-rooms").style.display = "none";
+      document.getElementById("step-time").style.display = "block";
+      document.getElementById("step-time").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function selectStartTime(timeVal, startMins, btn) {
+      document.querySelectorAll("#time-grid .time-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+
+      selectedStart = timeVal;
+      selectedStartMins = startMins;
+
+      const hours = (HOURS[building] || HOURS["Memorial Union"])[selectedDow];
+      const maxEndMins = Math.min(startMins + maxSessionMin, hours.close);
+      const endGrid = document.getElementById("end-time-grid");
+      endGrid.innerHTML = "";
+
+      // end time options: from start+15 up to start+maxSession (capped at close)
+      for (let t = startMins + 15; t <= maxEndMins; t += 15) {
+        const hh = String(Math.floor(t / 60) % 24).padStart(2, "0");
+        const mm = String(t % 60).padStart(2, "0");
+        const eb = document.createElement("button");
+        eb.className = "time-btn";
+        eb.textContent = fmtTime(t);
+        eb.onclick = () => selectEndTime(`${hh}:${mm}`, t, eb);
+        endGrid.appendChild(eb);
+      }
+
+      document.getElementById("step-rooms").style.display = "none";
+      document.getElementById("end-time-section").style.display = "block";
+      document.getElementById("end-time-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    async function selectEndTime(endVal, endMins, btn) {
+      document.querySelectorAll("#end-time-grid .time-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+
+      document.getElementById("ctx-time").textContent =
+        `${building}  ·  ${fmtDate(selectedDate)}  ·  ${fmtTime(selectedStartMins)} – ${fmtTime(endMins)}`;
+
+      document.getElementById("step-rooms").style.display = "block";
+      document.getElementById("step-rooms").scrollIntoView({ behavior: "smooth", block: "start" });
+
+      const grid = document.getElementById("room-grid");
+      grid.innerHTML = "<p>Loading...</p>";
+
+      try {
+        const res = await fetch(
+          `${API}/rooms?building=${encodeURIComponent(building)}&date=${selectedDate}&start_time=${selectedStart}`
+        );
+        const rooms = await res.json();
+
+        if (rooms.length === 0) {
+          grid.innerHTML = "<p style='color:#666;'>No rooms available for that time.</p>";
+          return;
+        }
+
+        grid.innerHTML = "";
+        rooms.forEach(r => {
+          const card = document.createElement("div");
+          card.className = "card room-card";
+          card.innerHTML = `<strong>Room ${r.room_num}</strong><br><span style="font-size:12px;color:#666;">Cap: ${r.capacity}</span>`;
+          card.onclick = () => {
+            const url = `confirm.html?room_id=${r.id}`
+              + `&room_num=${encodeURIComponent(r.room_num)}`
+              + `&building=${encodeURIComponent(building)}`
+              + `&date=${selectedDate}`
+              + `&start_time=${selectedStart}`
+              + `&end_time=${endVal}`;
+            location.href = url;
+          };
+          grid.appendChild(card);
+        });
+      } catch {
+        grid.innerHTML = "<p style='color:#c0392b;'>Could not load rooms. Is the server running?</p>";
+      }
+    }
+  </script>
+</body>
+</html>

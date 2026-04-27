@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HawkReserve</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <img src="../und-logo-png-transparent.png" alt="UND" class="logo">
+      <span class="header-title">HawkReserve</span>
+    </div>
+    <div class="header-right">
+      <span class="user-name" id="header-username"></span>
+      <button class="btn-sm btn-outline" onclick="logout()">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <h2 style="margin-bottom:16px;">Reserve a Room</h2>
+    <div class="card-grid">
+
+      <div class="card building-card" onclick="location.href='reserve.html?building=Memorial Union'">
+        <img src="../memunion-exterior.gif" alt="Memorial Union" class="building-card-img">
+        <div class="building-card-body">
+          <h2>Memorial Union</h2>
+          <div class="hours-list">
+            <div>Mon–Thu: 7:00 AM – Midnight</div>
+            <div>Fri: 7:00 AM – 10:00 PM</div>
+            <div>Sat: 8:00 AM – 10:00 PM</div>
+            <div>Sun: 11:00 AM – Midnight</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card building-card" onclick="location.href='reserve.html?building=Chester Fritz Library'">
+        <img src="../CF library.jpg" alt="Chester Fritz Library" class="building-card-img">
+        <div class="building-card-body">
+          <h2>Chester Fritz Library</h2>
+          <div class="hours-list">
+            <div>Mon–Thu: 7:30 AM – Midnight</div>
+            <div>Fri: 7:30 AM – 7:00 PM</div>
+            <div>Sat: 10:00 AM – 7:00 PM</div>
+            <div>Sun: 1:00 PM – Midnight</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <h2 style="margin-bottom:16px;">My Reservations</h2>
+    <div id="my-reservations">Loading...</div>
+  </main>
+
+  <script>
+    const API = "http://localhost:8000";
+
+    const user = JSON.parse(sessionStorage.getItem("user") || "null");
+    if (!user) {
+      location.href = "login.html";
+    } else if (user.role === "admin") {
+      location.href = "admin.html";
+    }
+
+    document.getElementById("header-username").textContent = user ? user.username : "";
+
+    function logout() {
+      sessionStorage.removeItem("user");
+      location.href = "login.html";
+    }
+
+    async function loadReservations() {
+      const container = document.getElementById("my-reservations");
+      const studentId = user.id || 1;
+      try {
+        const res = await fetch(`${API}/reservations?student_id=${studentId}`);
+        if (!res.ok) {
+          container.innerHTML = "<p style='color:#666; font-size:14px;'>No upcoming reservations.</p>";
+          return;
+        }
+        const data = await res.json();
+
+        if (!Array.isArray(data) || data.length === 0) {
+          container.innerHTML = "<p style='color:#666; font-size:14px;'>No upcoming reservations.</p>";
+          return;
+        }
+
+        container.innerHTML = data.map(r => `
+          <div class="reservation-item">
+            <strong>${r.building} — Room ${r.room_num}</strong><br>
+            ${r.start_time} to ${r.end_time}
+            <br>
+            <button class="cancel-btn" onclick="cancelReservation(${r.id})">Cancel</button>
+          </div>
+        `).join("");
+      } catch {
+        container.innerHTML = "<p style='color:#666; font-size:14px;'>No upcoming reservations.</p>";
+      }
+    }
+
+    async function cancelReservation(id) {
+      if (!confirm("Cancel this reservation?")) return;
+      const res = await fetch(`${API}/reservations/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        loadReservations();
+      } else {
+        alert(data.error);
+      }
+    }
+
+    loadReservations();
+  </script>
+</body>
+</html>
